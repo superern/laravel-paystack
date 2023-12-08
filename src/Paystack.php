@@ -3,18 +3,18 @@
 /*
  * This file is part of the Laravel Paystack package.
  *
- * (c) Prosper Otemuyiwa <prosperotemuyiwa@gmail.com>
+ * (c) Superern <superern14@gmail.com>
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
 
-namespace Unicodeveloper\Paystack;
+namespace Superern\Paystack;
 
 use GuzzleHttp\Client;
 use Illuminate\Support\Facades\Config;
-use Unicodeveloper\Paystack\Exceptions\IsNullException;
-use Unicodeveloper\Paystack\Exceptions\PaymentVerificationFailedException;
+use Superern\Paystack\Exceptions\IsNullException;
+use Superern\Paystack\Exceptions\PaymentVerificationFailedException;
 
 class Paystack
 {

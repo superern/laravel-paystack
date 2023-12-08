@@ -1,6 +1,6 @@
 {
-  "name": "unicodeveloper/laravel-paystack",
-  "description": "A Laravel Package for Paystack",
+  "name": "superern/laravel-paystack",
+  "description": "Laravel Package for Paystack integration",
   "keywords": [
     "php",
     "github",
@@ -12,17 +12,15 @@
     "paystack.co",
     "laravel 6",
     "laravel 7",
-    "laravel 8"
+    "laravel 8",
+    "laravel 9",
+    "laravel 10"
   ],
   "license": "MIT",
   "authors": [
     {
-      "name": "unicodeveloper",
-      "email": "prosperotemuyiwa@gmail.com"
-    },
-    {
-      "name": "iamfunsho",
-      "email": "info@devfunsho.com"
+      "name": "superern",
+      "email": "superern14@gmail.com"
     }
   ],
   "minimum-stability": "stable",
@@ -42,12 +40,12 @@
       "src/Support/helpers.php"
     ],
     "psr-4": {
-      "Unicodeveloper\\Paystack\\": "src/"
+      "Superern\\Paystack\\": "src/"
     }
   },
   "autoload-dev": {
     "psr-4": {
-      "Unicodeveloper\\Paystack\\Test\\": "tests"
+      "Superern\\Paystack\\Test\\": "tests"
     }
   },
   "scripts": {
@@ -56,10 +54,10 @@
   "extra": {
     "laravel": {
       "providers": [
-        "Unicodeveloper\\Paystack\\PaystackServiceProvider"
+        "Superern\\Paystack\\PaystackServiceProvider"
       ],
       "aliases": {
-        "Paystack": "Unicodeveloper\\Paystack\\Facades\\Paystack"
+        "Paystack": "Superern\\Paystack\\Facades\\Paystack"
       }
     }
   }
