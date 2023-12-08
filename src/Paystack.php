@@ -13,6 +13,7 @@ namespace Superern\Paystack;
 
 use GuzzleHttp\Client;
 use Illuminate\Support\Facades\Config;
+use Superern\Paystack\Contracts\Customer;
 use Superern\Paystack\Exceptions\IsNullException;
 use Superern\Paystack\Exceptions\PaymentVerificationFailedException;
 
@@ -412,17 +413,8 @@ class Paystack
     /**
      * Create a customer
      */
-    public function createCustomer()
+    public function createCustomer(array $data): array
     {
-        $data = [
-            "email" => request()->email,
-            "first_name" => request()->fname,
-            "last_name" => request()->lname,
-            "phone" => request()->phone,
-            "metadata" => request()->additional_info /* key => value pairs array */
-
-        ];
-
         $this->setRequestOptions();
         return $this->setHttpResponse('/customer', 'POST', $data)->getResponse();
     }
@@ -432,7 +424,7 @@ class Paystack
      * @param $customer_id
      * @return array
      */
-    public function fetchCustomer($customer_id)
+    public function fetchCustomer($customer_id): array
     {
         $this->setRequestOptions();
         return $this->setHttpResponse('/customer/' . $customer_id, 'GET', [])->getResponse();
@@ -443,17 +435,8 @@ class Paystack
      * @param $customer_id
      * @return array
      */
-    public function updateCustomer($customer_id)
+    public function updateCustomer(string $customer_id, array $data): array
     {
-        $data = [
-            "email" => request()->email,
-            "first_name" => request()->fname,
-            "last_name" => request()->lname,
-            "phone" => request()->phone,
-            "metadata" => request()->additional_info /* key => value pairs array */
-
-        ];
-
         $this->setRequestOptions();
         return $this->setHttpResponse('/customer/' . $customer_id, 'PUT', $data)->getResponse();
     }
