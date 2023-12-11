@@ -339,11 +339,11 @@ class Paystack
 
     /**
      * Get the whole response from a get operation
-     * @return array
      */
     private function getResponse()
     {
-        return json_decode($this->response->getBody(), true);
+        $body = json_decode($this->response->getBody(), true);
+        return json_decode(json_encode($body));
     }
 
     /**
@@ -451,10 +451,10 @@ class Paystack
     /**
      * Get Recipient based on id or recipient_code
      * @param  string  $recipient_code
-     * @return array
+     * @return mixed
      * @throws IsNullException
      */
-    public function getRecipient(string $recipient_code): array
+    public function getRecipient(string $recipient_code)
     {
         $this->setRequestOptions();
         return $this->setHttpResponse('/transferrecipient/' . $recipient_code, 'GET')->getResponse();
