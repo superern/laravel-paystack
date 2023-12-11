@@ -106,6 +106,44 @@ class Paystack
     }
 
     /**
+     * Initialize Withdrawal
+     * @throws IsNullException
+     */
+    public function withdrawalAuthorization($data = null)
+    {
+        // https://paystack.com/docs/api/transfer/#initiate
+
+        return $this->setHttpResponse(PaystackEndpoint::TRANSFER, 'POST', $data)->getResponse();
+    }
+
+    /**
+     * Get the whole response from a get operation
+     */
+    private function getResponse()
+    {
+        $body = json_decode($this->response->getBody(), true);
+        return json_decode(json_encode($body));
+    }
+
+    /**
+     * @param  string  $relativeUrl
+     * @param  string  $method
+     * @param  array  $body
+     * @return Paystack
+     * @throws IsNullException
+     */
+    private function setHttpResponse(string $relativeUrl, string $method, array $body = []): Paystack
+    {
+        $url = $this->baseUrl.$relativeUrl;
+        $body = ["body" => json_encode($body)];
+        $functionName = strtolower($method);
+
+        $this->response = $this->client->{$functionName}($url, $body);
+
+        return $this;
+    }
+
+    /**
      * Get the authorization url from the callback response
      * @return Paystack
      * @throws IsNullException
@@ -197,33 +235,6 @@ class Paystack
         $this->setHttpResponse(PaystackEndpoint::TRANSACTION.'/initialize', 'POST', $data);
 
         return $this;
-    }
-
-    /**
-     * @param  string  $relativeUrl
-     * @param  string  $method
-     * @param  array  $body
-     * @return Paystack
-     * @throws IsNullException
-     */
-    private function setHttpResponse(string $relativeUrl, string $method, array $body = []): Paystack
-    {
-        $url = $this->baseUrl.$relativeUrl;
-        $body = ["body" => json_encode($body)];
-        $functionName = strtolower($method);
-
-        $this->response = $this->client->{$functionName}($url, $body);
-
-        return $this;
-    }
-
-    /**
-     * Get the whole response from a get operation
-     */
-    private function getResponse()
-    {
-        $body = json_decode($this->response->getBody(), true);
-        return json_decode(json_encode($body));
     }
 
     /**
