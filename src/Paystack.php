@@ -109,7 +109,7 @@ class Paystack
      * Initialize Withdrawal
      * @throws IsNullException
      */
-    public function withdrawalAuthorization($data = null)
+    public function authorizeWithdrawal($data = null)
     {
         // https://paystack.com/docs/api/transfer/#initiate
 
