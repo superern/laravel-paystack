@@ -449,6 +449,41 @@ class Paystack
     }
 
     /**
+     * Get Recipient based on id or recipient_code
+     * @param  string  $recipient_code
+     * @return array
+     * @throws IsNullException
+     */
+    public function getRecipient(string $recipient_code): array
+    {
+        $this->setRequestOptions();
+        return $this->setHttpResponse('/transferrecipient/' . $recipient_code, 'GET')->getResponse();
+    }
+
+    /**
+     * Update Recipient's details based on id or recipient_code
+     * @param  string  $recipient_id
+     * @param  array  $data
+     * @return array
+     * @throws IsNullException
+     */
+    public function updateRecipient(string $recipient_id, array $data): array
+    {
+        $this->setRequestOptions();
+        return $this->setHttpResponse('/transferrecipient/' . $recipient_id, 'PUT', $data)->getResponse();
+    }
+
+    /**
+     * Get all Recipients
+     * @throws IsNullException
+     */
+    public function getAllRecipient(): array
+    {
+        return $this->setHttpResponse('/transferrecipient', 'GET')->getResponse();
+    }
+
+
+    /**
      * Fetch a customer based on id or code
      * @param $customer_id
      * @return array
