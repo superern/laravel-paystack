@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use PHPUnit\Util\Json;
+use Superern\Paystack\Enums\PaystackEndpoint;
 use Superern\Paystack\Exceptions\IsNullException;
 use Superern\Paystack\Exceptions\PaymentVerificationFailedException;
 
@@ -36,31 +37,31 @@ class Paystack
      * Issue Secret Key from your Paystack Dashboard
      * @var string
      */
-    protected $secretKey;
+    protected string $secretKey;
 
     /**
      * Instance of Client
      * @var Client
      */
-    protected $client;
+    protected Client $client;
 
     /**
      *  Response from requests made to Paystack
      * @var mixed
      */
-    protected $response;
+    protected mixed $response;
 
     /**
      * Paystack API base Url
      * @var string
      */
-    protected $baseUrl;
+    protected string $baseUrl;
 
     /**
      * Authorization Url - Paystack payment page
      * @var string
      */
-    protected $authorizationUrl;
+    protected string $authorizationUrl;
 
     public function __construct()
     {
@@ -70,40 +71,54 @@ class Paystack
     }
 
     /**
-     * Get Base Url from Paystack config file
-     */
-    public function setBaseUrl()
-    {
-        $this->baseUrl = Config::get('paystack.paymentUrl');
-    }
-
-    /**
      * Get secret key from Paystack config file
      */
-    public function setKey()
+    public function setKey(): void
     {
         $this->secretKey = Config::get('paystack.secretKey');
     }
 
     /**
+     * Get Base Url from Paystack config file
+     */
+    public function setBaseUrl(): void
+    {
+        $this->baseUrl = Config::get('paystack.paymentUrl');
+    }
+
+    /**
      * Set options for making the Client request
      */
-    private function setRequestOptions()
+    private function setRequestOptions(): void
     {
-        $authBearer = 'Bearer ' . $this->secretKey;
+        $authBearer = 'Bearer '.$this->secretKey;
 
         $this->client = new Client(
             [
                 'base_uri' => $this->baseUrl,
                 'headers' => [
                     'Authorization' => $authBearer,
-                    'Content-Type'  => 'application/json',
-                    'Accept'        => 'application/json'
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json'
                 ]
             ]
         );
     }
 
+    /**
+     * Get the authorization url from the callback response
+     * @return Paystack
+     * @throws IsNullException
+     */
+    public function getAuthorizationUrl($data = null): Paystack
+    {
+        $this->makePaymentRequest($data);
+
+        $response = $this->getResponse();
+        $this->url = $response->data->authorization_url;
+
+        return $this;
+    }
 
     /**
      * Initiate a payment request to Paystack
@@ -127,11 +142,12 @@ class Paystack
                 "first_name" => request()->first_name,
                 "last_name" => request()->last_name,
                 "callback_url" => request()->callback_url,
-                "currency" => (request()->currency != ""  ? request()->currency : "NGN"),
+                "currency" => (request()->currency != "" ? request()->currency : "NGN"),
 
                 /*
                     Paystack allows for transactions to be split into a subaccount -
-                    The following lines trap the subaccount ID - as well as the ammount to charge the subaccount (if overriden in the form)
+                    The following lines trap the subaccount ID - as well as the amount to charge the subaccount (if overridden in
+                 the form)
                     both values need to be entered within hidden input fields
                 */
                 "subaccount" => request()->subaccount,
@@ -178,11 +194,10 @@ class Paystack
             ]);
         }
 
-        $this->setHttpResponse('/transaction/initialize', 'POST', $data);
+        $this->setHttpResponse(PaystackEndpoint::TRANSACTION.'/initialize', 'POST', $data);
 
         return $this;
     }
-
 
     /**
      * @param  string  $relativeUrl
@@ -193,27 +208,22 @@ class Paystack
      */
     private function setHttpResponse(string $relativeUrl, string $method, array $body = []): Paystack
     {
-        $this->response = $this->client->{strtolower($method)}(
-            $this->baseUrl . $relativeUrl,
-            ["body" => json_encode($body)]
-        );
+        $url = $this->baseUrl.$relativeUrl;
+        $body = ["body" => json_encode($body)];
+        $functionName = strtolower($method);
+
+        $this->response = $this->client->{$functionName}($url, $body);
 
         return $this;
     }
 
     /**
-     * Get the authorization url from the callback response
-     * @return Paystack
-     * @throws IsNullException
+     * Get the whole response from a get operation
      */
-    public function getAuthorizationUrl($data = null): Paystack
+    private function getResponse()
     {
-        $this->makePaymentRequest($data);
-
-        $response = $this->getResponse();
-        $this->url = $response->data->authorization_url;
-
-        return $this;
+        $body = json_decode($this->response->getBody(), true);
+        return json_decode(json_encode($body));
     }
 
     /**
@@ -235,45 +245,6 @@ class Paystack
     }
 
     /**
-     * Hit Paystack Gateway to Verify that the transaction is valid
-     * @throws GuzzleException
-     */
-    private function verifyTransactionAtGateway($transaction_id = null)
-    {
-        $transactionRef = $transaction_id ?? request()->query('trxref');
-
-        $relativeUrl = "/transaction/verify/{$transactionRef}";
-
-        $this->response = $this->client->get($this->baseUrl . $relativeUrl, []);
-    }
-
-    /**
-     * True or false condition whether the transaction is verified
-     * @return boolean
-     * @throws GuzzleException
-     */
-    public function isTransactionVerificationValid($transaction_id = null): bool
-    {
-        $this->verifyTransactionAtGateway($transaction_id);
-
-        $result = $this->getResponse()['message'];
-
-        switch ($result) {
-            case self::VS:
-                $validate = true;
-                break;
-            case self::ITF:
-                $validate = false;
-                break;
-            default:
-                $validate = false;
-                break;
-        }
-
-        return $validate;
-    }
-
-    /**
      * Get Payment details if the transaction was verified successfully
      * @return json
      * @throws PaymentVerificationFailedException
@@ -286,6 +257,38 @@ class Paystack
         } else {
             throw new PaymentVerificationFailedException("Invalid Transaction Reference");
         }
+    }
+
+    /**
+     * True or false condition whether the transaction is verified
+     * @return boolean
+     * @throws GuzzleException
+     */
+    public function isTransactionVerificationValid($transaction_id = null): bool
+    {
+        $this->verifyTransactionAtGateway($transaction_id);
+
+        $response = $this->getResponse()['message'];
+
+        $result = $response->message;
+
+        return match ($result) {
+            self::VS => true,
+            default => false,
+        };
+    }
+
+    /**
+     * Hit Paystack Gateway to Verify that the transaction is valid
+     * @throws GuzzleException
+     */
+    private function verifyTransactionAtGateway($transactionId = null): void
+    {
+        $transactionRef = $transactionId ?? request()->query('transactionReference');
+
+        $relativeUrl = PaystackEndpoint::TRANSACTION."/verify/{$transactionRef}";
+
+        $this->response = $this->client->get($this->baseUrl.$relativeUrl, []);
     }
 
     /**
@@ -302,28 +305,18 @@ class Paystack
      */
     public function getAccessCode(): string
     {
-        return $this->getResponse()['data']['access_code'];
+        $response = $this->getResponse();
+
+        return $response->data->access_code;
     }
 
     /**
      * Generate a Unique Transaction Reference
      * @return string
      */
-    public function genTranxRef(): string
+    public function generateTransactionReference(): string
     {
         return TransRef::getHashedToken();
-    }
-
-    /**
-     * Get all the customers that have made transactions on your platform
-     * @return array
-     * @throws IsNullException
-     */
-    public function getAllCustomers(): array
-    {
-        $this->setRequestOptions();
-
-        return $this->setHttpResponse("/customer", 'GET', [])->getData();
     }
 
     /**
@@ -335,28 +328,7 @@ class Paystack
     {
         $this->setRequestOptions();
 
-        return $this->setHttpResponse("/plan", 'GET', [])->getData();
-    }
-
-    /**
-     * Get all the transactions that have happened overtime
-     * @return array
-     * @throws IsNullException
-     */
-    public function getAllTransactions(): array
-    {
-        $this->setRequestOptions();
-
-        return $this->setHttpResponse("/transaction", 'GET', [])->getData();
-    }
-
-    /**
-     * Get the whole response from a get operation
-     */
-    private function getResponse()
-    {
-        $body = json_decode($this->response->getBody(), true);
-        return json_decode(json_encode($body));
+        return $this->setHttpResponse(PaystackEndpoint::PLAN, 'GET', [])->getData();
     }
 
     /**
@@ -386,7 +358,7 @@ class Paystack
 
         $this->setRequestOptions();
 
-        return $this->setHttpResponse("/plan", 'POST', $data)->getResponse();
+        return $this->setHttpResponse(PaystackEndpoint::PLAN, 'POST', $data)->getResponse();
     }
 
     /**
@@ -395,10 +367,10 @@ class Paystack
      * @return mixed
      * @throws IsNullException
      */
-    public function fetchPlan($plan_code)
+    public function fetchPlan($plan_code): mixed
     {
         $this->setRequestOptions();
-        return $this->setHttpResponse('/plan/' . $plan_code, 'GET', [])->getResponse();
+        return $this->setHttpResponse(PaystackEndpoint::PLAN."/$plan_code", 'GET', [])->getResponse();
     }
 
     /**
@@ -407,7 +379,7 @@ class Paystack
      * @return mixed
      * @throws IsNullException
      */
-    public function updatePlan($plan_code)
+    public function updatePlan($plan_code): mixed
     {
         $data = [
             "name" => request()->name,
@@ -420,17 +392,7 @@ class Paystack
         ];
 
         $this->setRequestOptions();
-        return $this->setHttpResponse('/plan/' . $plan_code, 'PUT', $data)->getResponse();
-    }
-
-    /**
-     * Create a customer
-     * @throws IsNullException
-     */
-    public function createCustomer(array $data)
-    {
-        $this->setRequestOptions();
-        return $this->setHttpResponse('/customer', 'POST', $data)->getResponse();
+        return $this->setHttpResponse(PaystackEndpoint::PLAN."/$plan_code", 'PUT', $data)->getResponse();
     }
 
     /**
@@ -461,33 +423,34 @@ class Paystack
         $this->setRequestOptions();
 
         return $this
-            ->setHttpResponse('/transferrecipient', 'POST', $data)
+            ->setHttpResponse(PaystackEndpoint::RECIPIENT, 'POST', $data)
             ->getResponse();
     }
 
     /**
      * Get Recipient based on id or recipient_code
-     * @param  string  $recipient_code
+     * @param  string  $recipient
      * @return mixed
      * @throws IsNullException
      */
-    public function getRecipient(string $recipient_code)
+    public function getRecipient(string $recipient): mixed
     {
         $this->setRequestOptions();
-        return $this->setHttpResponse('/transferrecipient/' . $recipient_code, 'GET')->getResponse();
+        return $this->setHttpResponse(PaystackEndpoint::RECIPIENT."/$recipient", 'GET')->getResponse();
     }
 
     /**
      * Update Recipient's details based on id or recipient_code
-     * @param  string  $recipient_id
+     * @param  string  $recipient
      * @param  array  $data
      * @return mixed
      * @throws IsNullException
      */
-    public function updateRecipient(string $recipient_id, array $data)
+    public function updateRecipient(string $recipient, array $data): mixed
     {
         $this->setRequestOptions();
-        return $this->setHttpResponse('/transferrecipient/' . $recipient_id, 'PUT', $data)->getResponse();
+        return $this->setHttpResponse(PaystackEndpoint::RECIPIENT."/$recipient", 'PUT', $data)
+            ->getResponse();
     }
 
     /**
@@ -496,9 +459,30 @@ class Paystack
      */
     public function getAllRecipient()
     {
-        return $this->setHttpResponse('/transferrecipient', 'GET')->getResponse();
+        return $this->setHttpResponse(PaystackEndpoint::RECIPIENT, 'GET')->getResponse();
     }
 
+    /**
+     * Get all the customers that have made transactions on your platform
+     * @return array
+     * @throws IsNullException
+     */
+    public function getAllCustomers(): array
+    {
+        $this->setRequestOptions();
+
+        return $this->setHttpResponse(PaystackEndpoint::CUSTOMER, 'GET', [])->getData();
+    }
+
+    /**
+     * Create a customer
+     * @throws IsNullException
+     */
+    public function createCustomer(array $data)
+    {
+        $this->setRequestOptions();
+        return $this->setHttpResponse(PaystackEndpoint::CUSTOMER, 'POST', $data)->getResponse();
+    }
 
     /**
      * Fetch a customer based on id or code
@@ -506,10 +490,10 @@ class Paystack
      * @return mixed
      * @throws IsNullException
      */
-    public function fetchCustomer($customer_id)
+    public function fetchCustomer($customer_id): mixed
     {
         $this->setRequestOptions();
-        return $this->setHttpResponse('/customer/' . $customer_id, 'GET', [])->getResponse();
+        return $this->setHttpResponse(PaystackEndpoint::CUSTOMER."/$customer_id", 'GET', [])->getResponse();
     }
 
     /**
@@ -519,10 +503,22 @@ class Paystack
      * @return mixed
      * @throws IsNullException
      */
-    public function updateCustomer(string $customer_id, array $data)
+    public function updateCustomer(string $customer_id, array $data): mixed
     {
         $this->setRequestOptions();
-        return $this->setHttpResponse('/customer/' . $customer_id, 'PUT', $data)->getResponse();
+        return $this->setHttpResponse(PaystackEndpoint::CUSTOMER."/$customer_id", 'PUT', $data)->getResponse();
+    }
+
+    /**
+     * Get all the transactions that have happened overtime
+     * @return array
+     * @throws IsNullException
+     */
+    public function getAllTransactions(): array
+    {
+        $this->setRequestOptions();
+
+        return $this->setHttpResponse(PaystackEndpoint::TRANSACTION, 'GET', [])->getData();
     }
 
     /**
@@ -538,7 +534,7 @@ class Paystack
         ];
 
         $this->setRequestOptions();
-        return $this->setHttpResponse('/transaction/export', 'GET', $data)->getResponse();
+        return $this->setHttpResponse(PaystackEndpoint::TRANSACTION.'/export', 'GET', $data)->getResponse();
     }
 
     /**
@@ -554,7 +550,7 @@ class Paystack
         ];
 
         $this->setRequestOptions();
-        return $this->setHttpResponse('/subscription', 'POST', $data)->getResponse();
+        return $this->setHttpResponse(PaystackEndpoint::SUBSCRIPTION, 'POST', $data)->getResponse();
     }
 
     /**
@@ -566,7 +562,7 @@ class Paystack
     {
         $this->setRequestOptions();
 
-        return $this->setHttpResponse("/subscription", 'GET', [])->getData();
+        return $this->setHttpResponse(PaystackEndpoint::SUBSCRIPTION, 'GET', [])->getData();
     }
 
     /**
@@ -580,7 +576,7 @@ class Paystack
     {
         $this->setRequestOptions();
 
-        return $this->setHttpResponse('/subscription?customer=' . $customer_id, 'GET', [])->getData();
+        return $this->setHttpResponse(PaystackEndpoint::SUBSCRIPTION."?customer=$customer_id", 'GET', [])->getData();
     }
 
     /**
@@ -594,7 +590,7 @@ class Paystack
     {
         $this->setRequestOptions();
 
-        return $this->setHttpResponse('/subscription?plan=' . $plan_id, 'GET', [])->getData();
+        return $this->setHttpResponse(PaystackEndpoint::SUBSCRIPTION."?plan=$plan_id", 'GET', [])->getData();
     }
 
     /**
@@ -609,7 +605,7 @@ class Paystack
         ];
 
         $this->setRequestOptions();
-        return $this->setHttpResponse('/subscription/enable', 'POST', $data)->getResponse();
+        return $this->setHttpResponse(PaystackEndpoint::SUBSCRIPTION.'/enable', 'POST', $data)->getResponse();
     }
 
     /**
@@ -624,18 +620,19 @@ class Paystack
         ];
 
         $this->setRequestOptions();
-        return $this->setHttpResponse('/subscription/disable', 'POST', $data)->getResponse();
+        return $this->setHttpResponse(PaystackEndpoint::SUBSCRIPTION.'/disable', 'POST', $data)->getResponse();
     }
 
     /**
      * Fetch details about a certain subscription
-     * @param  mixed  $subscription_id
+     * @param  string  $subscription_id
+     * @return mixed
      * @throws IsNullException
      */
-    public function fetchSubscription($subscription_id)
+    public function fetchSubscription(string $subscription_id): mixed
     {
         $this->setRequestOptions();
-        return $this->setHttpResponse('/subscription/' . $subscription_id, 'GET', [])->getResponse();
+        return $this->setHttpResponse(PaystackEndpoint::SUBSCRIPTION."/$subscription_id", 'GET', [])->getResponse();
     }
 
     /**
@@ -651,7 +648,7 @@ class Paystack
         ];
 
         $this->setRequestOptions();
-        return $this->setHttpResponse('/page', 'POST', $data)->getResponse();
+        return $this->setHttpResponse(PaystackEndpoint::PAGE, 'POST', $data)->getResponse();
     }
 
     /**
@@ -661,7 +658,7 @@ class Paystack
     public function getAllPages()
     {
         $this->setRequestOptions();
-        return $this->setHttpResponse('/page', 'GET', [])->getResponse();
+        return $this->setHttpResponse(PaystackEndpoint::PAGE, 'GET', [])->getResponse();
     }
 
     /**
@@ -672,7 +669,7 @@ class Paystack
     public function fetchPage($page_id)
     {
         $this->setRequestOptions();
-        return $this->setHttpResponse('/page/' . $page_id, 'GET', [])->getResponse();
+        return $this->setHttpResponse(PaystackEndpoint::PAGE."/$page_id", 'GET', [])->getResponse();
     }
 
     /**
@@ -681,7 +678,7 @@ class Paystack
      * @return mixed
      * @throws IsNullException
      */
-    public function updatePage($page_id)
+    public function updatePage($page_id): mixed
     {
         $data = [
             "name" => request()->name,
@@ -690,7 +687,7 @@ class Paystack
         ];
 
         $this->setRequestOptions();
-        return $this->setHttpResponse('/page/' . $page_id, 'PUT', $data)->getResponse();
+        return $this->setHttpResponse(PaystackEndpoint::PAGE."/$page_id", 'PUT', $data)->getResponse();
     }
 
     /**
@@ -715,7 +712,7 @@ class Paystack
         ];
 
         $this->setRequestOptions();
-        return $this->setHttpResponse('/subaccount', 'POST', array_filter($data))->getResponse();
+        return $this->setHttpResponse(PaystackEndpoint::SUBACCOUNT, 'POST', array_filter($data))->getResponse();
     }
 
     /**
@@ -724,11 +721,11 @@ class Paystack
      * @return mixed
      * @throws IsNullException
      */
-    public function fetchSubAccount($subAccountCode)
+    public function fetchSubAccount($subAccountCode): mixed
     {
 
         $this->setRequestOptions();
-        return $this->setHttpResponse("/subaccount/{$subAccountCode}", "GET", [])->getResponse();
+        return $this->setHttpResponse(PaystackEndpoint::SUBACCOUNT."/{$subAccountCode}", "GET", [])->getResponse();
     }
 
     /**
@@ -740,7 +737,8 @@ class Paystack
     {
 
         $this->setRequestOptions();
-        return $this->setHttpResponse("/subaccount/?perPage=" . (int) $per_page . "&page=" . (int) $page, "GET")->getResponse();
+        return $this->setHttpResponse(PaystackEndpoint::SUBACCOUNT."/?perPage=".(int) $per_page."&page=".(int)
+            $page, "GET")->getResponse();
     }
 
 
@@ -752,7 +750,7 @@ class Paystack
      * @throws IsNullException
      */
 
-    public function updateSubAccount($subAccountCode)
+    public function updateSubAccount($subAccountCode): mixed
     {
         $data = [
             "business_name" => request()->business_name,
@@ -768,6 +766,7 @@ class Paystack
         ];
 
         $this->setRequestOptions();
-        return $this->setHttpResponse("/subaccount/{$subAccountCode}", "PUT", array_filter($data))->getResponse();
+        return $this->setHttpResponse(PaystackEndpoint::SUBACCOUNT."/{$subAccountCode}", "PUT", array_filter($data))
+            ->getResponse();
     }
 }
