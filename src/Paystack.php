@@ -12,9 +12,11 @@
 namespace Superern\Paystack;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use PHPUnit\Util\Json;
 use Superern\Paystack\Exceptions\IsNullException;
 use Superern\Paystack\Exceptions\PaymentVerificationFailedException;
 
@@ -104,14 +106,14 @@ class Paystack
 
 
     /**
-
      * Initiate a payment request to Paystack
      * Included the option to pass the payload to this method for situations
      * when the payload is built on the fly (not passed to the controller from a view)
      * @return Paystack
+     * @throws IsNullException
      */
 
-    public function makePaymentRequest($data = null)
+    public function makePaymentRequest($data = null): Paystack
     {
         if ($data == null) {
 
@@ -202,12 +204,14 @@ class Paystack
     /**
      * Get the authorization url from the callback response
      * @return Paystack
+     * @throws IsNullException
      */
-    public function getAuthorizationUrl($data = null)
+    public function getAuthorizationUrl($data = null): Paystack
     {
         $this->makePaymentRequest($data);
 
-        $this->url = $this->getResponse()['data']['authorization_url'];
+        $response = $this->getResponse();
+        $this->url = $response->data->authorization_url;
 
         return $this;
     }
@@ -217,18 +221,22 @@ class Paystack
      * In situations where Laravel serves as an backend for a detached UI, the api cannot redirect
      * and might need to take different actions based on the success or not of the transaction
      * @return array
+     * @throws IsNullException
      */
-    public function getAuthorizationResponse($data)
+    public function getAuthorizationResponse($data): array
     {
         $this->makePaymentRequest($data);
 
-        $this->url = $this->getResponse()['data']['authorization_url'];
+        $response = $this->getResponse();
 
-        return $this->getResponse();
+        $this->url = $response->data->authorization_url;
+
+        return $response;
     }
 
     /**
      * Hit Paystack Gateway to Verify that the transaction is valid
+     * @throws GuzzleException
      */
     private function verifyTransactionAtGateway($transaction_id = null)
     {
@@ -242,8 +250,9 @@ class Paystack
     /**
      * True or false condition whether the transaction is verified
      * @return boolean
+     * @throws GuzzleException
      */
-    public function isTransactionVerificationValid($transaction_id = null)
+    public function isTransactionVerificationValid($transaction_id = null): bool
     {
         $this->verifyTransactionAtGateway($transaction_id);
 
@@ -268,8 +277,9 @@ class Paystack
      * Get Payment details if the transaction was verified successfully
      * @return json
      * @throws PaymentVerificationFailedException
+     * @throws GuzzleException
      */
-    public function getPaymentData()
+    public function getPaymentData(): json
     {
         if ($this->isTransactionVerificationValid()) {
             return $this->getResponse();
@@ -290,7 +300,7 @@ class Paystack
      * Get Access code from transaction callback respose
      * @return string
      */
-    public function getAccessCode()
+    public function getAccessCode(): string
     {
         return $this->getResponse()['data']['access_code'];
     }
@@ -299,7 +309,7 @@ class Paystack
      * Generate a Unique Transaction Reference
      * @return string
      */
-    public function genTranxRef()
+    public function genTranxRef(): string
     {
         return TransRef::getHashedToken();
     }
@@ -307,8 +317,9 @@ class Paystack
     /**
      * Get all the customers that have made transactions on your platform
      * @return array
+     * @throws IsNullException
      */
-    public function getAllCustomers()
+    public function getAllCustomers(): array
     {
         $this->setRequestOptions();
 
@@ -318,8 +329,9 @@ class Paystack
     /**
      * Get all the plans that you have on Paystack
      * @return array
+     * @throws IsNullException
      */
-    public function getAllPlans()
+    public function getAllPlans(): array
     {
         $this->setRequestOptions();
 
@@ -329,8 +341,9 @@ class Paystack
     /**
      * Get all the transactions that have happened overtime
      * @return array
+     * @throws IsNullException
      */
-    public function getAllTransactions()
+    public function getAllTransactions(): array
     {
         $this->setRequestOptions();
 
@@ -350,13 +363,14 @@ class Paystack
      * Get the data response from a get operation
      * @return array
      */
-    private function getData()
+    private function getData(): array
     {
-        return $this->getResponse()['data'];
+        return $this->getResponse()->data;
     }
 
     /**
      * Create a plan
+     * @throws IsNullException
      */
     public function createPlan()
     {
@@ -378,7 +392,8 @@ class Paystack
     /**
      * Fetch any plan based on its plan id or code
      * @param $plan_code
-     * @return array
+     * @return mixed
+     * @throws IsNullException
      */
     public function fetchPlan($plan_code)
     {
@@ -389,7 +404,8 @@ class Paystack
     /**
      * Update any plan's details based on its id or code
      * @param $plan_code
-     * @return array
+     * @return mixed
+     * @throws IsNullException
      */
     public function updatePlan($plan_code)
     {
@@ -409,8 +425,9 @@ class Paystack
 
     /**
      * Create a customer
+     * @throws IsNullException
      */
-    public function createCustomer(array $data): array
+    public function createCustomer(array $data)
     {
         $this->setRequestOptions();
         return $this->setHttpResponse('/customer', 'POST', $data)->getResponse();
@@ -420,7 +437,7 @@ class Paystack
      * Create a Recipient
      * @throws IsNullException
      */
-    public function createRecipient(array $data): array
+    public function createRecipient(array $data)
     {
         $rules = [
             'type' => 'required',
@@ -464,10 +481,10 @@ class Paystack
      * Update Recipient's details based on id or recipient_code
      * @param  string  $recipient_id
      * @param  array  $data
-     * @return array
+     * @return mixed
      * @throws IsNullException
      */
-    public function updateRecipient(string $recipient_id, array $data): array
+    public function updateRecipient(string $recipient_id, array $data)
     {
         $this->setRequestOptions();
         return $this->setHttpResponse('/transferrecipient/' . $recipient_id, 'PUT', $data)->getResponse();
@@ -477,7 +494,7 @@ class Paystack
      * Get all Recipients
      * @throws IsNullException
      */
-    public function getAllRecipient(): array
+    public function getAllRecipient()
     {
         return $this->setHttpResponse('/transferrecipient', 'GET')->getResponse();
     }
@@ -486,9 +503,10 @@ class Paystack
     /**
      * Fetch a customer based on id or code
      * @param $customer_id
-     * @return array
+     * @return mixed
+     * @throws IsNullException
      */
-    public function fetchCustomer($customer_id): array
+    public function fetchCustomer($customer_id)
     {
         $this->setRequestOptions();
         return $this->setHttpResponse('/customer/' . $customer_id, 'GET', [])->getResponse();
@@ -496,11 +514,12 @@ class Paystack
 
     /**
      * Update a customer's details based on their id or code
-     * @param $customer_id
-     * @param $data
-     * @return array
+     * @param  string  $customer_id
+     * @param  array  $data
+     * @return mixed
+     * @throws IsNullException
      */
-    public function updateCustomer(string $customer_id, array $data): array
+    public function updateCustomer(string $customer_id, array $data)
     {
         $this->setRequestOptions();
         return $this->setHttpResponse('/customer/' . $customer_id, 'PUT', $data)->getResponse();
@@ -508,7 +527,7 @@ class Paystack
 
     /**
      * Export transactions in .CSV
-     * @return array
+     * @throws IsNullException
      */
     public function exportTransactions()
     {
@@ -524,6 +543,7 @@ class Paystack
 
     /**
      * Create a subscription to a plan from a customer.
+     * @throws IsNullException
      */
     public function createSubscription()
     {
@@ -540,9 +560,9 @@ class Paystack
     /**
      * Get all the subscriptions made on Paystack.
      *
-     * @return array
+     * @throws IsNullException
      */
-    public function getAllSubscriptions()
+    public function getAllSubscriptions(): array
     {
         $this->setRequestOptions();
 
@@ -552,10 +572,11 @@ class Paystack
     /**
      * Get customer subscriptions
      *
-     * @param integer $customer_id
+     * @param  integer  $customer_id
      * @return array
+     * @throws IsNullException
      */
-    public function getCustomerSubscriptions($customer_id)
+    public function getCustomerSubscriptions(int $customer_id): array
     {
         $this->setRequestOptions();
 
@@ -565,10 +586,11 @@ class Paystack
     /**
      * Get plan subscriptions
      *
-     * @param  integer $plan_id
+     * @param  integer  $plan_id
      * @return array
+     * @throws IsNullException
      */
-    public function getPlanSubscriptions($plan_id)
+    public function getPlanSubscriptions(int $plan_id): array
     {
         $this->setRequestOptions();
 
@@ -577,7 +599,7 @@ class Paystack
 
     /**
      * Enable a subscription using the subscription code and token
-     * @return array
+     * @throws IsNullException
      */
     public function enableSubscription()
     {
@@ -592,7 +614,7 @@ class Paystack
 
     /**
      * Disable a subscription using the subscription code and token
-     * @return array
+     * @throws IsNullException
      */
     public function disableSubscription()
     {
@@ -607,8 +629,8 @@ class Paystack
 
     /**
      * Fetch details about a certain subscription
-     * @param mixed $subscription_id
-     * @return array
+     * @param  mixed  $subscription_id
+     * @throws IsNullException
      */
     public function fetchSubscription($subscription_id)
     {
@@ -618,6 +640,7 @@ class Paystack
 
     /**
      * Create pages you can share with users using the returned slug
+     * @throws IsNullException
      */
     public function createPage()
     {
@@ -633,7 +656,7 @@ class Paystack
 
     /**
      * Fetches all the pages the merchant has
-     * @return array
+     * @throws IsNullException
      */
     public function getAllPages()
     {
@@ -643,8 +666,8 @@ class Paystack
 
     /**
      * Fetch details about a certain page using its id or slug
-     * @param mixed $page_id
-     * @return array
+     * @param  mixed  $page_id
+     * @throws IsNullException
      */
     public function fetchPage($page_id)
     {
@@ -655,7 +678,8 @@ class Paystack
     /**
      * Update the details about a particular page
      * @param $page_id
-     * @return array
+     * @return mixed
+     * @throws IsNullException
      */
     public function updatePage($page_id)
     {
@@ -670,9 +694,10 @@ class Paystack
     }
 
     /**
-     * Creates a subaccount to be used for split payments . Required    params are business_name , settlement_bank , account_number ,   percentage_charge
+     * Creates a SubAccount to be used for split payments . Required    params are business_name , settlement_bank ,
+     * account_number ,   percentage_charge
      *
-     * @return array
+     * @throws IsNullException
      */
 
     public function createSubAccount()
@@ -694,21 +719,22 @@ class Paystack
     }
 
     /**
-     * Fetches details of a subaccount
-     * @param subaccount code
-     * @return array
+     * Fetches details of a SubAccount
+     * @param  $subAccountCode
+     * @return mixed
+     * @throws IsNullException
      */
-    public function fetchSubAccount($subaccount_code)
+    public function fetchSubAccount($subAccountCode)
     {
 
         $this->setRequestOptions();
-        return $this->setHttpResponse("/subaccount/{$subaccount_code}", "GET", [])->getResponse();
+        return $this->setHttpResponse("/subaccount/{$subAccountCode}", "GET", [])->getResponse();
     }
 
     /**
      * Lists all the subaccounts associated with the account
-     * @param $per_page - Specifies how many records to retrieve per page , $page - SPecifies exactly what page to retrieve
-     * @return array
+     * @param $per_page  - Specifies how many records to retrieve per page , $page - SPecifies exactly what page to retrieve
+     * @throws IsNullException
      */
     public function listSubAccounts($per_page, $page)
     {
@@ -719,12 +745,14 @@ class Paystack
 
 
     /**
-     * Updates a subaccount to be used for split payments . Required params are business_name , settlement_bank , account_number , percentage_charge
-     * @param subaccount code
-     * @return array
+     * Updates a SubAccount to be used for split payments . Required params are business_name , settlement_bank ,
+     * account_number , percentage_charge
+     * @param  $subAccountCode
+     * @return mixed
+     * @throws IsNullException
      */
 
-    public function updateSubAccount($subaccount_code)
+    public function updateSubAccount($subAccountCode)
     {
         $data = [
             "business_name" => request()->business_name,
@@ -740,6 +768,6 @@ class Paystack
         ];
 
         $this->setRequestOptions();
-        return $this->setHttpResponse("/subaccount/{$subaccount_code}", "PUT", array_filter($data))->getResponse();
+        return $this->setHttpResponse("/subaccount/{$subAccountCode}", "PUT", array_filter($data))->getResponse();
     }
 }
