@@ -15,5 +15,4 @@ use Exception;
 
 class IsNullException extends Exception
 {
-
 }

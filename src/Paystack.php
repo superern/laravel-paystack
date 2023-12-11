@@ -13,7 +13,8 @@ namespace Superern\Paystack;
 
 use GuzzleHttp\Client;
 use Illuminate\Support\Facades\Config;
-use Superern\Paystack\Contracts\Customer;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 use Superern\Paystack\Exceptions\IsNullException;
 use Superern\Paystack\Exceptions\PaymentVerificationFailedException;
 
@@ -182,18 +183,14 @@ class Paystack
 
 
     /**
-     * @param string $relativeUrl
-     * @param string $method
-     * @param array $body
+     * @param  string  $relativeUrl
+     * @param  string  $method
+     * @param  array  $body
      * @return Paystack
      * @throws IsNullException
      */
-    private function setHttpResponse($relativeUrl, $method, $body = [])
+    private function setHttpResponse(string $relativeUrl, string $method, array $body = []): Paystack
     {
-        if (is_null($method)) {
-            throw new IsNullException("Empty method not allowed");
-        }
-
         $this->response = $this->client->{strtolower($method)}(
             $this->baseUrl . $relativeUrl,
             ["body" => json_encode($body)]
@@ -420,6 +417,38 @@ class Paystack
     }
 
     /**
+     * Create a Recipient
+     * @throws IsNullException
+     */
+    public function createRecipient(array $data): array
+    {
+        $rules = [
+            'type' => 'required',
+            'name' => 'required',
+            'account_number' => 'required',
+            'bank_code' => 'required',
+            'currency' => 'nullable',
+        ];
+
+        // Create a validator instance
+        $validator = Validator::make($data, $rules);
+
+        // If currency is not provided, set it to the default value 'NGN'
+        $data['currency'] = $data['currency'] ?? 'NGN';
+
+        // Check if validation fails
+        if ($validator->fails()) {
+            throw new ValidationException($validator);
+        }
+
+        $this->setRequestOptions();
+
+        return $this
+            ->setHttpResponse('/transferrecipient', 'POST', $data)
+            ->getResponse();
+    }
+
+    /**
      * Fetch a customer based on id or code
      * @param $customer_id
      * @return array
@@ -433,6 +462,7 @@ class Paystack
     /**
      * Update a customer's details based on their id or code
      * @param $customer_id
+     * @param $data
      * @return array
      */
     public function updateCustomer(string $customer_id, array $data): array
